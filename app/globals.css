@@ -89,3 +89,11 @@
     outline: 2px solid var(--foreground);
   }
 }
+/* src/app/globals.css */
+
+@media print {
+  body {
+    background: white;
+  }
+ 
+}
