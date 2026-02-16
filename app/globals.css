@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/* 1. Definição de Variáveis (Design Tokens) */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  /* Fontes de sistema para garantir que o texto aparece sempre, mesmo se a internet for lenta */
+  --font-system: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Suporte a Dark Mode (Baseado na preferência do sistema) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* 2. Configuração do Tema (Tailwind v4) */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  
+  /* Se a fonte Geist (Next.js) falhar, usa a do sistema */
+  --font-sans: var(--font-geist-sans), var(--font-system);
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+/* 3. Normalização e Compatibilidade Mobile */
+@layer base {
+  /* Reset universal para garantir tamanhos consistentes */
+  *,
+  ::after,
+  ::before {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+    border-color: #e5e7eb;
+  }
+
+  html {
+    /* Impede zoom indesejado ao rodar o telemóvel (iOS) */
+    -webkit-text-size-adjust: 100%;
+    /* Scroll suave ao clicar em links na mesma página */
+    scroll-behavior: smooth;
+    /* Evita scroll lateral acidental */
+    overflow-x: hidden;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    
+    /* Fontes mais nítidas em ecrãs de alta resolução (Retina/Mobile) */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    
+    /* Garante que o fundo vai até ao fim da tela em telemóveis (ignora barra de endereço) */
+    min-height: 100dvh; 
+    line-height: 1.5;
+  }
+
+  /* --- Otimizações para Formulários Mobile --- */
+  
+  /* Evita que o iPhone faça zoom automático ao clicar no input */
+  input, select, textarea, button {
+    font-family: inherit;
+    font-size: 100%; 
+    /* Remove estilos nativos feios de alguns telemóveis */
+    -webkit-appearance: none; 
+    appearance: none;
+  }
+  
+  /* Restaura o visual padrão apenas para Checkbox e Radio */
+  input[type="checkbox"], input[type="radio"] {
+    -webkit-appearance: auto;
+    appearance: auto;
+  }
+
+  /* Remove o contorno azul padrão ao clicar (foco) */
+  :focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+  
+  /* Acessibilidade: Mostra foco apenas quando se navega com teclado */
+  :focus-visible {
+    outline: 2px solid var(--foreground);
+  }
+}
