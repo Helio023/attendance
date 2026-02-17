@@ -66,7 +66,7 @@ export default function GerarQrCodePage() {
         </div>
 
         <div className="bg-white p-4 inline-block border-4 border-gray-900 rounded-lg">
-          {urlDestino && <QRCode value={urlDestino} size={300} level="H" />}
+          {urlDestino && <QRCode value={urlDestino} size={300} level="L" />}
         </div>
 
         {/* Instruções */}

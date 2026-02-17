@@ -1,19 +1,23 @@
-// // src/models/Employee.ts
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IEmployee extends Document {
   name: string;
-  pin: string; // Guardado como texto simples para admin ver
+  pin: string;
   active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-const EmployeeSchema: Schema = new Schema({
-  name: { type: String, required: true },
-  pin: { type: String, required: true },
-  active: { type: Boolean, default: true },
-}, { timestamps: true });
+const EmployeeSchema = new Schema<IEmployee>(
+  {
+    name: { type: String, required: true },
+    pin: { type: String, required: true },
+    active: { type: Boolean, default: true },
+  },
+  { timestamps: true },
+);
 
-// Evita erro de recompilação do modelo no Next.js
-const Employee: Model<IEmployee> = mongoose.models.Employee || mongoose.model<IEmployee>('Employee', EmployeeSchema);
-
+const Employee: Model<IEmployee> =
+  mongoose.models.Employee ||
+  mongoose.model<IEmployee>("Employee", EmployeeSchema);
 export default Employee;

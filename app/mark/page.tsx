@@ -2,7 +2,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
 
-// --- ÍCONES (SPINNER, CASA, CHECK, ERRO) ---
+// --- ÍCONES ---
 const Spinner = () => (
   <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -22,119 +22,137 @@ interface IEmployeeSimple {
 
 interface IModalState {
   show: boolean;
-  type: 'success' | 'error' | 'warning';
+  type: 'success' | 'error';
   title: string;
   message: string;
 }
 
 export default function MarkAttendancePage() {
-  // --- ESTADOS ---
   const [employees, setEmployees] = useState<IEmployeeSimple[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [pin, setPin] = useState('');
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState(''); // Estado para mensagem de GPS
 
-  // Estado do Pop-up (Modal)
+  // Estado do Modal
   const [modal, setModal] = useState<IModalState>({ 
     show: false, type: 'success', title: '', message: '' 
   });
 
-  // --- CARREGAMENTO INICIAL ---
   useEffect(() => {
-    // 1. Busca Funcionários
+    // 1. Cache Local
+    const cachedData = localStorage.getItem('funcionarios_cache');
+    if (cachedData) {
+      try { setEmployees(JSON.parse(cachedData)); } catch (e) {}
+    }
+
+    // 2. API Funcionários
     fetch('/api/employees?all=true')
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setEmployees(data);
-        else if (data.data && Array.isArray(data.data)) setEmployees(data.data);
-        else setEmployees([]);
-      })
-      .catch(() => setEmployees([]));
+        let lista = [];
+        if (Array.isArray(data)) lista = data;
+        else if (data.data && Array.isArray(data.data)) lista = data.data;
 
-    // 2. Busca Token de Segurança
+        if (lista.length > 0) {
+          setEmployees(lista);
+          localStorage.setItem('funcionarios_cache', JSON.stringify(lista));
+        }
+      }).catch(console.error);
+
+    // 3. Token
     fetch('/api/auth/token')
       .then((res) => res.json())
       .then((data) => setToken(data.token))
       .catch(console.error);
   }, []);
 
-  // --- ENVIAR PRESENÇA ---
+  // --- NOVA FUNÇÃO DE SUBMISSÃO COM GPS ---
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedId || !pin) return;
     
     setLoading(true);
+    setGpsStatus('A obter localização...');
 
-    try {
-      const res = await fetch('/api/attendance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          employeeId: selectedId, 
-          pinEntered: pin,
-          token: token 
-        }),
-      });
-
-      const data = await res.json();
-      
-      if (data.success) {
-        // Sucesso: Mostra modal verde
-        setModal({
-          show: true,
-          type: 'success',
-          title: 'Presença Confirmada!',
-          message: data.message
-        });
-      } else {
-        // Erro: Mostra modal vermelho
-        setModal({
-          show: true,
-          type: 'error',
-          title: 'Atenção',
-          message: data.message
-        });
-      }
-    } catch (err) {
-      setModal({
-        show: true,
-        type: 'error',
-        title: 'Erro de Conexão',
-        message: 'Verifique a internet e tente novamente.'
-      });
-    } finally {
+    // Verificar suporte a GPS
+    if (!navigator.geolocation) {
+      setModal({ show: true, type: 'error', title: 'Erro GPS', message: 'Seu navegador não suporta geolocalização.' });
       setLoading(false);
+      return;
     }
+
+    // Pedir Localização
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        // SUCESSO NO GPS
+        const { latitude, longitude } = position.coords;
+        
+        setGpsStatus('A enviar dados...');
+        
+        try {
+          const res = await fetch('/api/attendance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              employeeId: selectedId, 
+              pinEntered: pin,
+              token: token,
+              latitude,  // Envia as coordenadas
+              longitude 
+            }),
+          });
+
+          const data = await res.json();
+          
+          if (data.success) {
+            setModal({ show: true, type: 'success', title: 'Sucesso!', message: data.message });
+          } else {
+            setModal({ show: true, type: 'error', title: 'Atenção', message: data.message });
+          }
+        } catch (err) {
+          setModal({ show: true, type: 'error', title: 'Erro de Conexão', message: 'Verifique a internet.' });
+        } finally {
+          setLoading(false);
+          setGpsStatus('');
+        }
+      },
+      (error) => {
+        // ERRO NO GPS
+        console.error(error);
+        setLoading(false);
+        setGpsStatus('');
+        
+        let msg = "Erro ao obter localização.";
+        if (error.code === 1) msg = "Você precisa permitir o acesso à Localização.";
+        if (error.code === 2) msg = "Sinal de GPS indisponível.";
+        if (error.code === 3) msg = "Tempo limite do GPS esgotado.";
+
+        setModal({ show: true, type: 'error', title: 'Localização Necessária', message: msg });
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   };
 
-  // --- FECHAR MODAL E LIMPAR ---
   const handleCloseModal = () => {
     setModal({ ...modal, show: false });
-    
-    // Se foi sucesso, limpa tudo e recarrega para o próximo
     if (modal.type === 'success') {
       setPin('');
       setSelectedId('');
-      window.location.reload(); 
+      fetch('/api/auth/token').then(r => r.json()).then(d => setToken(d.token)).catch(console.error);
     }
-    // Se foi erro, apenas fecha para ele tentar de novo (não limpa o nome)
     if (modal.type === 'error') {
-      setPin(''); // Limpa só o PIN
+      setPin(''); 
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col relative">
       
-      {/* --- BOTÃO DE VOLTAR AO INÍCIO --- */}
       <div className="absolute top-4 left-4 z-10">
-        <Link 
-          href="/" 
-          className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-full shadow-md border border-gray-200 hover:bg-gray-100 transition font-medium text-sm"
-        >
-          <HomeIcon />
-          <span>Início</span>
+        <Link href="/" className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-full shadow-md border border-gray-200 hover:bg-gray-100 transition font-medium text-sm">
+          <HomeIcon /> Início
         </Link>
       </div>
 
@@ -143,16 +161,19 @@ export default function MarkAttendancePage() {
           
           <div className="text-center mb-8">
             <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">
-              Marcar presença
+              Marcar Presença
             </h1>
             <p className="text-sm text-gray-500 mt-2">
               SDEJT - MAXIXE
             </p>
+            <div className="mt-2 inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              Localização Obrigatória
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             
-            {/* SELECIONAR NOME */}
             <div className="space-y-2">
               <label className="block text-sm font-bold text-gray-700 uppercase tracking-wide">
                 Identificação
@@ -177,7 +198,6 @@ export default function MarkAttendancePage() {
               </div>
             </div>
 
-            {/* INSERIR PIN */}
             <div className="space-y-2">
               <label className="block text-sm font-bold text-gray-700 uppercase tracking-wide">
                 Código PIN
@@ -193,76 +213,52 @@ export default function MarkAttendancePage() {
               />
             </div>
 
-            {/* BOTÃO CONFIRMAR */}
             <button
               type="submit"
               disabled={loading || !token}
-              className={`w-full rounded-xl py-4 font-bold text-white text-lg shadow-lg transition-all transform active:scale-95 flex justify-center items-center ${
+              className={`w-full rounded-xl py-4 font-bold text-white text-lg shadow-lg transition-all transform active:scale-95 flex justify-center items-center flex-col leading-none ${
                 loading 
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
               }`}
             >
-              {loading ? <Spinner /> : null}
-              {loading ? 'Validando...' : 'MARCAR PRESENÇA'}
+              <div className="flex items-center gap-2">
+                {loading && <Spinner />}
+                <span>{loading ? gpsStatus : 'MARCAR PRESENÇA'}</span>
+              </div>
             </button>
 
             <p className="text-center text-xs text-gray-400 mt-4">
-              Sessão segura ativa.
+              Deverá estar a menos de 100m do escritório.
             </p>
           </form>
         </div>
       </div>
 
-      {/* --- MODAL PROFISSIONAL (POP-UP) --- */}
       {modal.show && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all scale-100">
-            
-            {/* Ícone e Cor de Fundo */}
-            <div className={`p-6 flex flex-col items-center justify-center ${
-              modal.type === 'success' ? 'bg-green-50' : 'bg-red-50'
-            }`}>
-              <div className={`rounded-full p-4 mb-4 ${
-                modal.type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-              }`}>
+            <div className={`p-6 flex flex-col items-center justify-center ${modal.type === 'success' ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div className={`rounded-full p-4 mb-4 ${modal.type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                 {modal.type === 'success' ? (
-                  // Ícone Check
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                 ) : (
-                  // Ícone X
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                 )}
               </div>
-              
-              <h3 className={`text-xl font-bold text-center ${
-                modal.type === 'success' ? 'text-green-800' : 'text-red-800'
-              }`}>
+              <h3 className={`text-xl font-bold text-center ${modal.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
                 {modal.title}
               </h3>
             </div>
-
-            {/* Conteúdo da Mensagem */}
             <div className="p-6 text-center">
-              <p className="text-gray-600 text-lg leading-relaxed">
-                {modal.message}
-              </p>
-
-              <button
-                onClick={handleCloseModal}
-                className={`mt-6 w-full py-3 rounded-xl font-bold text-white transition shadow-md ${
-                  modal.type === 'success' 
-                    ? 'bg-green-600 hover:bg-green-700' 
-                    : 'bg-red-600 hover:bg-red-700'
-                }`}
-              >
+              <p className="text-gray-600 text-lg leading-relaxed">{modal.message}</p>
+              <button onClick={handleCloseModal} className={`mt-6 w-full py-3 rounded-xl font-bold text-white transition shadow-md ${modal.type === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
                 {modal.type === 'success' ? 'OK, Próximo' : 'Tentar Novamente'}
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-// IMPORTAÇÕES NOVAS PARA CORRIGIR A HORA
+
 import { toZonedTime } from "date-fns-tz";
 import { format } from "date-fns";
 
@@ -17,10 +17,8 @@ export default function HomePage() {
   const [presencas, setPresencas] = useState<IPresencaHoje[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Relógio (Visual apenas)
   useEffect(() => {
     const updateTime = () => {
-      // Força o relógio a mostrar a hora de Maputo, não a do PC
       const timeZone = "Africa/Maputo";
       const now = new Date();
       const zonedDate = toZonedTime(now, timeZone);
@@ -47,6 +45,17 @@ export default function HomePage() {
     fetchToday();
   }, []);
 
+  const formatarAtraso = (minutosTotais: number) => {
+    const horas = Math.floor(minutosTotais / 60);
+    const minutos = minutosTotais % 60;
+
+    if (horas > 0) {
+      return minutos > 0 ? `+${horas}h ${minutos}min` : `+${horas}h`;
+    }
+
+    return `+${minutosTotais} min`;
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center bg-gray-50 p-6">
       <div className="text-center mb-8 mt-4">
@@ -62,14 +71,23 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="flex gap-4 justify-center mt-2">
+        {/* --- ÁREA DOS BOTÕES --- */}
+        <div className="flex gap-4 justify-center mt-2 items-center">
           <Link
             href="/admin"
             className="text-xs font-bold text-gray-500 hover:text-blue-600 underline"
           >
             Painel Admin
           </Link>
-          <span className="text-gray-300"></span>
+
+          <span className="text-gray-300">|</span>
+
+          <Link
+            href="/mark"
+            className="text-xs font-bold text-gray-500 hover:text-blue-600 underline"
+          >
+            📍 Marcar Presença
+          </Link>
         </div>
       </div>
 
@@ -95,7 +113,9 @@ export default function HomePage() {
           ) : presencas.length === 0 ? (
             <div className="p-8 text-center flex flex-col items-center">
               <span className="text-4xl mb-2">zzz</span>
-              <p className="text-gray-500">Ninguém marcou ponto hoje ainda.</p>
+              <p className="text-gray-500">
+                Ninguém marcou presença hoje ainda.
+              </p>
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
@@ -131,7 +151,7 @@ export default function HomePage() {
                       <td className="p-4 text-right">
                         {p.lateMinutes > 0 ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            +{p.lateMinutes} min
+                            {formatarAtraso(p.lateMinutes)}
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

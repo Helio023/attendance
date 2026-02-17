@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
     const agoraMaputo = toZonedTime(new Date(), fusoHorario);
     let inicio, fim;
 
+    // Definição dos intervalos
     switch (periodo) {
       case 'semanal':
         inicio = startOfWeek(agoraMaputo, { weekStartsOn: 1 });
@@ -36,16 +37,16 @@ export async function GET(req: NextRequest) {
     const queryInicio = fromZonedTime(inicio, fusoHorario);
     const queryFim = fromZonedTime(fim, fusoHorario);
 
-    // 2. Buscar Dados
+    // 2. Buscar Dados (Logs Factuais)
     const dados = await Attendance.find({
       checkIn: { $gte: queryInicio, $lte: queryFim }
     }).sort({ checkIn: -1 });
 
     // 3. Criar Excel
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Presenças');
+    const worksheet = workbook.addWorksheet('Logs de Presença');
 
-    // Definir Colunas (Larguras)
+    // Definir Colunas
     worksheet.columns = [
       { key: 'nome', width: 35 },
       { key: 'data', width: 15 },
@@ -54,13 +55,14 @@ export async function GET(req: NextRequest) {
       { key: 'estado', width: 20 },
     ];
 
-    // --- CABEÇALHO OFICIAL ---
+    // --- CABEÇALHO OFICIAL MELHORADO ---
     const linhasCabecalho = [
       "República de Moçambique",
       "Província de Inhambane",
       "Governo do Distrito de Maxixe",
       "Serviço Distrital de Educação, Juventude e Tecnologia de Maxixe",
-      "Lista de presença de funcionários"
+      "Lista de Presenças Registadas", // Mudança Semântica (Sugestão 1)
+      "(Relatório Operacional de Caráter Informativo)" // Proteção Institucional (Sugestão 2)
     ];
 
     linhasCabecalho.forEach((texto, index) => {
@@ -68,29 +70,35 @@ export async function GET(req: NextRequest) {
       const linha = worksheet.getRow(numLinha);
       linha.values = [texto];
       
-      // Mesclar da coluna A até E (1 a 5)
       worksheet.mergeCells(numLinha, 1, numLinha, 5);
       
       const celula = linha.getCell(1);
       celula.alignment = { vertical: 'middle', horizontal: 'center' };
-      celula.font = { 
-        name: 'Arial', 
-        size: index === 4 ? 14 : 12, // Título maior
-        bold: true 
-      };
+      
+      // Formatação específica
+      if (index === 5) {
+        // Estilo para o aviso "(Informativo)"
+        celula.font = { name: 'Arial', size: 10, italic: true, color: { argb: 'FF555555' } };
+      } else {
+        // Estilo para os títulos oficiais
+        celula.font = { 
+          name: 'Arial', 
+          size: index === 4 ? 14 : 12, 
+          bold: true 
+        };
+      }
     });
 
-    // Pular linha 6
-    worksheet.addRow([]);
+    worksheet.addRow([]); // Espaço
 
-    // Linha 7: Cabeçalho da Tabela
+    // Linha 8: Cabeçalho da Tabela
     const headerRow = worksheet.addRow(['Nome Funcionário', 'Data', 'Hora', 'Atraso (min)', 'Estado']);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     headerRow.eachCell((cell) => {
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF2c3e50' } // Azul escuro
+        fgColor: { argb: 'FF2c3e50' }
       };
       cell.alignment = { horizontal: 'center' };
     });
@@ -107,26 +115,29 @@ export async function GET(req: NextRequest) {
         estado: item.lateMinutes > 0 ? 'Atrasado' : 'Pontual'
       });
 
-      // Centralizar colunas de dados
       row.getCell(2).alignment = { horizontal: 'center' };
       row.getCell(3).alignment = { horizontal: 'center' };
       row.getCell(4).alignment = { horizontal: 'center' };
       row.getCell(5).alignment = { horizontal: 'center' };
 
-      // Pintar vermelho se atrasado
       if (item.lateMinutes > 0) {
         row.getCell(4).font = { color: { argb: 'FFFF0000' }, bold: true };
         row.getCell(5).font = { color: { argb: 'FFFF0000' }, bold: true };
       }
     });
 
-    // 5. Retornar Arquivo
+    // 5. Gerar Nome do Arquivo Dinâmico (Sugestão 3)
+    const dataInicioStr = format(inicio, 'yyyy-MM-dd');
+    const dataFimStr = format(fim, 'yyyy-MM-dd');
+   
+    const nomeArquivo = `Logs_Presenca_${periodo}_${dataInicioStr}_a_${dataFimStr}.xlsx`;
+
     const buffer = await workbook.xlsx.writeBuffer();
     
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="Relatorio_Presencas_${periodo}.xlsx"`
+        'Content-Disposition': `attachment; filename="${nomeArquivo}"`
       }
     });
 
