@@ -10,12 +10,12 @@ import {
   startOfDay,
   endOfDay,
 } from "date-fns";
-import { getDistanceFromLatLonInMeters } from "@/lib/haversine"; // <--- IMPORTA A FUNÇÃO
+import { getDistanceFromLatLonInMeters } from "@/lib/haversine"; 
 
 export async function POST(req: NextRequest) {
   try {
     await connectDB();
-    // Recebemos agora latitude e longitude do telemóvel
+    
     const { employeeId, pinEntered, latitude, longitude } = await req.json();
 
     // ============================================================
@@ -24,11 +24,6 @@ export async function POST(req: NextRequest) {
     const officeLat = parseFloat(process.env.OFFICE_LAT || "0");
     const officeLng = parseFloat(process.env.OFFICE_LNG || "0");
     const maxDist = parseInt(process.env.MAX_DISTANCE_METERS || "100");
-
-
-    console.log("--- DEBUG GPS ---");
-console.log("Escritorio (Config):", officeLat, officeLng);
-console.log("Funcionario (GPS):", latitude, longitude);
 
     // Se as coordenadas do escritório estiverem configuradas, validamos
     if (officeLat !== 0 && officeLng !== 0) {
@@ -53,7 +48,7 @@ console.log("Funcionario (GPS):", latitude, longitude);
         return NextResponse.json(
           {
             success: false,
-            message: `Você está longe da empresa (${Math.round(distance)}m). Aproxime-se.`,
+            message: `Você está longe do SDEJT-MAXIXE (${Math.round(distance)}m). Aproxime-se.`,
           },
           { status: 403 },
         );
